@@ -2,7 +2,6 @@ module Main where
 
 import Prelude (bind, ($), Unit, discard)
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Exception (EXCEPTION)
 import DOM (DOM)
 import DOM.Event.Types (Event)
 import Pux (CoreEffects, EffModel, noEffects, start)
@@ -16,14 +15,12 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Text.Smolder.HTML
 import Text.Smolder.Markup (text, (#!))
 
-import Signal.Channel (CHANNEL)
-
 import State (State, init)
 import Editor as Editor
 
 
 data Action
-  = SetNotes Event
+  = SetNotes Event -- We're using the Event type because that's what onChange expects, but actually it's a simple String.
 
 
 foldp :: forall e. Action -> State -> EffModel State Action (dom :: DOM | e)
@@ -42,7 +39,7 @@ view state =
     div $ text (fromMaybe "" state.notes)
 
 
-main :: Eff (CoreEffects (channel :: CHANNEL, exception :: EXCEPTION, dom :: DOM)) Unit
+main :: Eff (CoreEffects (dom :: DOM)) Unit
 main = do
   app <- start
     { initialState: init
