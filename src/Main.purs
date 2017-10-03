@@ -1,68 +1,56 @@
 module Main where
 
-import Prelude (bind, pure, (<$>))
+import Prelude (bind, ($), Unit, discard)
 import Control.Monad.Eff (Eff)
-import Pux (App, CoreEffects, start, renderToDOM, fromSimple)
-import Pux.Html (Html, Attribute, h3, div, text)
-import Pux.Html.Attributes (attr)
-import Pux.Devtool as Pux.Devtool
-import Data.Function.Uncurried (runFn2)
+import Control.Monad.Eff.Exception (EXCEPTION)
+import DOM (DOM)
+import DOM.Event.Types (Event)
+import Pux (CoreEffects, EffModel, noEffects, start)
+import Pux.DOM.HTML (HTML)
+import Pux.DOM.Events (onChange)
+import Pux.Renderer.React (renderToDOM)
+
 import Unsafe.Coerce (unsafeCoerce)
-import Data.Array ((!!))
-import Data.Maybe (Maybe, fromMaybe)
-import State
+import Data.Maybe (Maybe(..), fromMaybe)
+
+import Text.Smolder.HTML
+import Text.Smolder.Markup (text, (#!))
+
+import Signal.Channel (CHANNEL)
+
+import State (State, init)
 import Editor as Editor
 
 
-data Action eventArg
-  = SetNotes (Array eventArg)
+data Action
+  = SetNotes Event
 
 
-update :: forall e. Action e -> State -> State
-update (SetNotes eventArgs) state = state { notes = notes' }
+foldp :: forall e. Action -> State -> EffModel State Action (dom :: DOM | e)
+foldp (SetNotes ev) state = noEffects $ state { notes = Just notes' }
   where
-    notes' :: Maybe String
-    notes' = unsafeCoerce <$> (eventArgs !! 0)
+    notes' :: String
+    notes' = unsafeCoerce ev
 
 
-evt :: forall event action. String -> (Array event -> action) -> Attribute action
-evt eventName = runFn2 Editor.changeHandler eventName
-
-
-view :: forall e. State -> Html (Action e)
+view :: State -> HTML Action
 view state =
-  div []
-    [ h3 [] [ text "A React component (react-quill)" ]
-    , Editor.fromReact [ evt "onChange" SetNotes
-                       , attr "defaultValue" (fromMaybe "" state.notes) ] []
-    , h3 [] [ text "Contents of the editor" ]
-    , div [] [ text (fromMaybe "" state.notes) ]
-    ]
+  div $ do
+    h3 $ text "A React component (react-quill)"
+    Editor.component {value: fromMaybe "" state.notes} #! onChange (SetNotes) $ text ""
+    h3 $ text "Contents of the editor"
+    div $ text (fromMaybe "" state.notes)
 
 
-main :: forall e. State -> Eff (CoreEffects ()) (App State (Action e))
-main state = do
+main :: Eff (CoreEffects (channel :: CHANNEL, exception :: EXCEPTION, dom :: DOM)) Unit
+main = do
   app <- start
-    { initialState: state
-    , update: fromSimple update
-    , view: view
+    { initialState: init
+    , view
+    , foldp
     , inputs: []
     }
 
-  renderToDOM "#app" app.html
-
-  pure app
+  renderToDOM "#app" app.markup app.input
 
 
-debug :: forall e. State -> Eff (CoreEffects ()) (App State (Pux.Devtool.Action (Action e)))
-debug state = do
-  app <- Pux.Devtool.start
-    { initialState: state
-    , update: fromSimple update
-    , view: view
-    , inputs: []
-    }
-
-  renderToDOM "#app" app.html
-
-  pure app
